@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    container_name: shortsgrab-backend
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build: ./frontend/shortsgrab
+    container_name: shortsgrab-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
