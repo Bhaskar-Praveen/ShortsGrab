@@ -8,7 +8,7 @@ const app = express();
 // Rate limiting to prevent abuse
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: process.env.RATE_LIMIT_MAX || 10, // limit each IP to 10 requests per minute
+  max: process.env.RATE_LIMIT_MAX || 10,
   message: { error: "Too many requests, please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -21,7 +21,6 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
@@ -36,8 +35,6 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Apply rate limiter to download endpoint
 app.use('/api/download', limiter);
 
 /**
@@ -52,16 +49,17 @@ app.get("/health", (req, res) => {
 });
 
 /**
- * Quality format mapping for yt-dlp
+ * FIXED: Quality format mapping - prioritizes pre-merged formats
  */
 const getFormatString = (quality) => {
   const formats = {
-    'best': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-    '4k': 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best',
-    '1080p': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
-    '720p': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
-    '480p': 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best',
-    '360p': 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best'
+    // Try to get pre-merged MP4 first, then merge best video+audio
+    'best': 'bestvideo[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/bestvideo+bestaudio/best',
+    '4k': 'bestvideo[height<=2160][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/bestvideo[height<=2160]+bestaudio/best',
+    '1080p': 'bestvideo[height<=1080][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/bestvideo[height<=1080]+bestaudio/best',
+    '720p': 'bestvideo[height<=720][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/bestvideo[height<=720]+bestaudio/best',
+    '480p': 'bestvideo[height<=480][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/bestvideo[height<=480]+bestaudio/best',
+    '360p': 'bestvideo[height<=360][ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/bestvideo[height<=360]+bestaudio/best'
   };
   
   return formats[quality] || formats['best'];
@@ -80,7 +78,36 @@ const isValidUrl = (url) => {
 };
 
 /**
- * STREAMING DOWNLOAD with Quality Options
+ * Get video metadata for filename
+ */
+const getVideoMetadata = (url) => {
+  return new Promise((resolve, reject) => {
+    const ytdlp = spawn("yt-dlp", [
+      "--print", "%(title)s|||%(uploader)s",
+      "--no-playlist",
+      url
+    ]);
+
+    let output = '';
+    
+    ytdlp.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    ytdlp.on('close', (code) => {
+      if (code === 0 && output) {
+        const [title, uploader] = output.trim().split('|||');
+        const sanitizedTitle = (title || 'video').replace(/[<>:"/\\|?*]/g, '_').substring(0, 100);
+        resolve({ title: sanitizedTitle, uploader: uploader || 'unknown' });
+      } else {
+        resolve({ title: `video_${Date.now()}`, uploader: 'unknown' });
+      }
+    });
+  });
+};
+
+/**
+ * FIXED: STREAMING DOWNLOAD with proper MP4 output
  */
 app.get("/api/download", async (req, res) => {
   const { url, quality = 'best' } = req.query;
@@ -94,7 +121,6 @@ app.get("/api/download", async (req, res) => {
     return res.status(400).json({ error: "Unsupported platform or invalid URL" });
   }
 
-  // Validate quality parameter
   const validQualities = ['best', '4k', '1080p', '720p', '480p', '360p'];
   if (!validQualities.includes(quality)) {
     return res.status(400).json({ error: "Invalid quality parameter" });
@@ -102,50 +128,66 @@ app.get("/api/download", async (req, res) => {
 
   console.log(`[${new Date().toISOString()}] Download: ${url} | Quality: ${quality} | IP: ${req.ip}`);
 
-  // Set headers
-  res.setHeader("Content-Type", "video/mp4");
-  res.setHeader("Content-Disposition", `attachment; filename="shortsgrab_${quality}.mp4"`);
-  res.setHeader("X-Content-Type-Options", "nosniff");
+  try {
+    // Get video metadata
+    const metadata = await getVideoMetadata(url);
+    const filename = `${metadata.title}.mp4`;
 
-  const formatString = getFormatString(quality);
+    // Set headers
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
 
-  // Spawn yt-dlp
-  const ytdlp = spawn("yt-dlp", [
-    "-f", formatString,
-    "-o", "-",
-    "--no-playlist",
-    "--no-part",
-    "--quiet",
-    "--no-warnings",
-    "--merge-output-format", "mp4",
-    "--max-filesize", "500M", // Limit file size to 500MB
-    url
-  ]);
+    const formatString = getFormatString(quality);
 
-  // Pipe to response
-  ytdlp.stdout.pipe(res);
+    // FIXED: Spawn yt-dlp with better merging options
+    const ytdlp = spawn("yt-dlp", [
+      "-f", formatString,
+      "-o", "-",
+      "--no-playlist",
+      "--no-part",
+      "--quiet",
+      "--no-warnings",
+      // CRITICAL: Force remux to MP4 container with video+audio
+      "--remux-video", "mp4",
+      "--merge-output-format", "mp4",
+      // Prefer h264/avc codec (better compatibility)
+      "--format-sort", "vcodec:h264,acodec:m4a",
+      "--max-filesize", "500M",
+      url
+    ]);
 
-  // Error handling
-  ytdlp.stderr.on("data", (data) => {
-    console.error(`[yt-dlp error]: ${data.toString()}`);
-  });
+    // Pipe to response
+    ytdlp.stdout.pipe(res);
 
-  ytdlp.on("close", (code) => {
-    if (code !== 0) {
-      console.error(`[yt-dlp] Process exited with code ${code}`);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Download failed. The video may be unavailable or restricted." });
+    // Error handling
+    ytdlp.stderr.on("data", (data) => {
+      console.error(`[yt-dlp]: ${data.toString()}`);
+    });
+
+    ytdlp.on("close", (code) => {
+      if (code !== 0) {
+        console.error(`[yt-dlp] Process exited with code ${code}`);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Download failed. The video may be unavailable or restricted." });
+        }
       }
-    }
-    res.end();
-  });
+      res.end();
+    });
 
-  // Handle client disconnect
-  req.on("close", () => {
-    if (!ytdlp.killed) {
-      ytdlp.kill("SIGKILL");
+    // Handle client disconnect
+    req.on("close", () => {
+      if (!ytdlp.killed) {
+        ytdlp.kill("SIGKILL");
+      }
+    });
+
+  } catch (error) {
+    console.error('Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to process request" });
     }
-  });
+  }
 });
 
 // 404 handler
