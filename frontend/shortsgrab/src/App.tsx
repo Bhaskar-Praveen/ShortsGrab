@@ -1,127 +1,281 @@
 import { useState } from "react";
-import DownloadSection from "./components/DownloadSection";
-import Header from "./components/Header";
-import Footer from "./components/Footer";
+import { detectPlatform } from "./utils/detectPlatform";
 
 export default function App() {
   const [url, setUrl] = useState("");
+  const [quality, setQuality] = useState("best");
+  const [isDownloading, setIsDownloading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+  const platform = detectPlatform(url);
+  const isValidUrl = url && /^https?:\/\/(www\.)?(youtube\.com|youtu\.be|instagram\.com)/i.test(url);
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      setUrl(text);
+    } catch (err) {
+      console.error("Paste failed");
+    }
+  };
+
+  const handleDownload = () => {
+    if (!isValidUrl) {
+      alert("Please enter a valid URL");
+      return;
+    }
+    setIsDownloading(true);
+    const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&quality=${quality}`;
+    window.open(downloadUrl, '_blank');
+    setTimeout(() => setIsDownloading(false), 3000);
+  };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${
-      isDarkMode 
-        ? 'bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900' 
-        : 'bg-gradient-to-br from-gray-50 via-purple-50 to-gray-50'
-    }`}>
+    <div style={{
+      minHeight: '100vh',
+      background: isDarkMode 
+        ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+        : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      
       {/* Header */}
-      <Header isDarkMode={isDarkMode} toggleTheme={toggleTheme} />
-
-      {/* Main Content - Vertically Centered */}
-      <main className="flex items-center justify-center min-h-[calc(100vh-180px)] px-4 py-12">
-        <div className="w-full max-w-3xl">
-          
-          {/* Hero Section */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl mb-6 shadow-2xl transform hover:scale-110 transition-transform">
-              <span className="text-4xl">📱</span>
-            </div>
-            <h1 className={`text-5xl md:text-7xl font-bold mb-4 ${
-              isDarkMode ? 'text-white' : 'text-gray-900'
-            }`}>
-              ShortsGrab
-            </h1>
-            <p className={`text-lg md:text-xl mb-2 ${
-              isDarkMode ? 'text-purple-200' : 'text-purple-700'
-            }`}>
-              Download YouTube Shorts & Instagram Reels instantly
-            </p>
-            <p className={`text-sm ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-600'
-            }`}>
-              High quality • Multiple formats • 100% free
-            </p>
-          </div>
-
-          {/* Main Card */}
-          <div className={`rounded-3xl shadow-2xl border backdrop-blur-xl p-8 md:p-12 ${
-            isDarkMode 
-              ? 'bg-white/10 border-white/20' 
-              : 'bg-white border-gray-200'
-          }`}>
-            <DownloadSection url={url} setUrl={setUrl} isDarkMode={isDarkMode} />
-          </div>
-
-          {/* Features Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12">
-            <FeatureCard 
-              icon={
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
-                </svg>
-              }
-              title="YouTube"
-              description="Shorts & Videos"
-              isDarkMode={isDarkMode}
-            />
-            <FeatureCard 
-              icon={
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073z"/>
-                </svg>
-              }
-              title="Instagram"
-              description="Reels & Posts"
-              isDarkMode={isDarkMode}
-            />
-            <FeatureCard 
-              icon="⚡"
-              title="Fast"
-              description="Instant downloads"
-              isDarkMode={isDarkMode}
-            />
-            <FeatureCard 
-              icon="🎯"
-              title="4K Quality"
-              description="Up to 2160p"
-              isDarkMode={isDarkMode}
-            />
-          </div>
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        padding: '20px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        background: 'rgba(0,0,0,0.2)',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '24px' }}>📱</span>
+          <span style={{ color: 'white', fontSize: '20px', fontWeight: 'bold' }}>ShortsGrab</span>
         </div>
-      </main>
+        <button 
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          style={{
+            background: 'rgba(255,255,255,0.2)',
+            border: 'none',
+            borderRadius: '10px',
+            padding: '10px 15px',
+            fontSize: '20px',
+            cursor: 'pointer'
+          }}
+        >
+          {isDarkMode ? '☀️' : '🌙'}
+        </button>
+      </div>
+
+      {/* Main Card */}
+      <div style={{
+        maxWidth: '500px',
+        width: '100%',
+        background: 'white',
+        borderRadius: '20px',
+        padding: '40px',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        marginTop: '80px'
+      }}>
+        
+        <h1 style={{ 
+          textAlign: 'center', 
+          fontSize: '32px', 
+          marginBottom: '10px',
+          color: '#333'
+        }}>
+          Download Videos
+        </h1>
+        <p style={{ 
+          textAlign: 'center', 
+          color: '#666', 
+          marginBottom: '30px' 
+        }}>
+          YouTube Shorts & Instagram Reels
+        </p>
+
+        {/* URL Input */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#333'
+          }}>
+            Video URL
+          </label>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://youtube.com/shorts/..."
+              style={{
+                flex: 1,
+                padding: '12px 16px',
+                border: '2px solid #e0e0e0',
+                borderRadius: '10px',
+                fontSize: '14px',
+                outline: 'none',
+                transition: 'border 0.3s'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#667eea'}
+              onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+            />
+            <button
+              onClick={handlePaste}
+              style={{
+                padding: '12px 20px',
+                background: '#f5f5f5',
+                border: 'none',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#333'
+              }}
+            >
+              Paste
+            </button>
+          </div>
+          {platform !== "unknown" && url && (
+            <div style={{ 
+              marginTop: '8px',
+              fontSize: '12px',
+              color: '#667eea',
+              fontWeight: '600'
+            }}>
+              {platform === "youtube" && "✓ YouTube"}
+              {platform === "instagram" && "✓ Instagram"}
+            </div>
+          )}
+        </div>
+
+        {/* Quality Selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#333'
+          }}>
+            Quality
+          </label>
+          <select
+            value={quality}
+            onChange={(e) => setQuality(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              border: '2px solid #e0e0e0',
+              borderRadius: '10px',
+              fontSize: '14px',
+              outline: 'none',
+              cursor: 'pointer',
+              background: 'white'
+            }}
+          >
+            <option value="best">Best Quality</option>
+            <option value="4k">4K (2160p)</option>
+            <option value="1080p">Full HD (1080p)</option>
+            <option value="720p">HD (720p)</option>
+            <option value="480p">SD (480p)</option>
+            <option value="360p">Low (360p)</option>
+          </select>
+        </div>
+
+        {/* Download Button */}
+        <button
+          onClick={handleDownload}
+          disabled={!isValidUrl || isDownloading}
+          style={{
+            width: '100%',
+            padding: '16px',
+            background: isValidUrl && !isDownloading 
+              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+              : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: '10px',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            cursor: isValidUrl && !isDownloading ? 'pointer' : 'not-allowed',
+            transition: 'transform 0.2s',
+            boxShadow: isValidUrl ? '0 4px 15px rgba(102, 126, 234, 0.4)' : 'none'
+          }}
+          onMouseEnter={(e) => {
+            if (isValidUrl && !isDownloading) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+          }}
+        >
+          {isDownloading ? 'Opening Download...' : 'Download Video'}
+        </button>
+
+        {isValidUrl && (
+          <p style={{ 
+            textAlign: 'center', 
+            marginTop: '15px', 
+            fontSize: '12px', 
+            color: '#999' 
+          }}>
+            Format: MP4 • Quality: {quality.toUpperCase()}
+          </p>
+        )}
+      </div>
+
+      {/* Features */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '15px',
+        maxWidth: '500px',
+        width: '100%',
+        marginTop: '30px'
+      }}>
+        <Feature icon="🎬" text="Multiple Platforms" />
+        <Feature icon="⚡" text="Fast Downloads" />
+        <Feature icon="🎯" text="Up to 4K" />
+      </div>
 
       {/* Footer */}
-      <Footer isDarkMode={isDarkMode} />
+      <p style={{ 
+        color: 'white', 
+        fontSize: '14px', 
+        marginTop: '40px',
+        opacity: 0.8
+      }}>
+        © 2026 ShortsGrab • Made with ❤️
+      </p>
     </div>
   );
 }
 
-function FeatureCard({ icon, title, description, isDarkMode }: { 
-  icon: React.ReactNode | string; 
-  title: string; 
-  description: string;
-  isDarkMode: boolean;
-}) {
+function Feature({ icon, text }: { icon: string; text: string }) {
   return (
-    <div className={`rounded-2xl p-6 transition-all hover:scale-105 cursor-default ${
-      isDarkMode 
-        ? 'bg-white/5 hover:bg-white/10 border border-white/10' 
-        : 'bg-white hover:bg-gray-50 border border-gray-200 shadow-md'
-    }`}>
-      <div className={`mb-3 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
-        {typeof icon === 'string' ? (
-          <div className="text-3xl">{icon}</div>
-        ) : (
-          icon
-        )}
-      </div>
-      <h3 className={`font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-        {title}
-      </h3>
-      <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-        {description}
-      </p>
+    <div style={{
+      background: 'rgba(255,255,255,0.2)',
+      backdropFilter: 'blur(10px)',
+      borderRadius: '15px',
+      padding: '15px',
+      textAlign: 'center'
+    }}>
+      <div style={{ fontSize: '24px', marginBottom: '5px' }}>{icon}</div>
+      <p style={{ color: 'white', fontSize: '12px', fontWeight: '600', margin: 0 }}>{text}</p>
     </div>
   );
 }
