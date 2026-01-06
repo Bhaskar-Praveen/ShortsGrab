@@ -245,3 +245,19 @@ If you find this project useful, please consider giving it a star! ⭐
 <div align="center">
   Made with ❤️ by <a href="https://github.com/Bhaskar-Praveen">Bhaskar Praveen</a>
 </div>
+
+## 📸 Screenshot
+
+![ShortsGrab Interface](screenshot.png)
+
+---
+
+## 🎨 Features Showcase
+
+- **Beautiful UI**: Modern gradient design with smooth animations
+- **One-Click Paste**: Quick clipboard access
+- **Smart Detection**: Automatically detects YouTube & Instagram links
+- **Multiple Qualities**: Choose from 360p to 4K
+- **Theme Toggle**: Switch between light and dark modes
+- **Breathing Exercise**: Relaxing animation while downloading
+- **Mobile Friendly**: Fully responsive design
