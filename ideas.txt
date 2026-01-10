@@ -2,3 +2,5 @@ added Helm charts
 tunneling the app 
 
 terraform as IaC
+Observability tools 
+build alert mechanism in place
