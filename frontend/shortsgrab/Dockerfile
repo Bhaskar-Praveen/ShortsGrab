@@ -13,7 +13,7 @@ COPY . .
 RUN npm run build
 
 # Production image
-FROM nginx:alpine
+FROM nginx:1.29.4-alpine3.23-slim
 
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
